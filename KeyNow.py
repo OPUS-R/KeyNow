@@ -13,7 +13,7 @@ from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
 from datetime import datetime, date, timedelta
 
-#ログ設定###############################################################################################################
+#ログ設定###############################################################################################################あ
 logging.basicConfig(
     filename="keynow.log",
     level=logging.INFO,
