@@ -110,6 +110,7 @@ config = json.load(open("line.json", encoding="utf-8"))
 LINE_ACCESS_TOKEN = config["line_bot_token"]
 LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply"
 LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push"
+AUTH_CODE = config["auth_code"]#認証グループコード
 
 #Flask / APScheduler 初期化##############################################################################################
 app = Flask(__name__)
@@ -343,7 +344,7 @@ def webhook():
             continue
 
     #グループ認証
-        if group_id and text.startswith("####"):#認証番号
+        if group_id and any(text.startswith(code) for code in config["auth_codes"]):#認証番号
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
             c.execute("INSERT OR IGNORE INTO groups(group_id) VALUES (?)", (group_id,))
