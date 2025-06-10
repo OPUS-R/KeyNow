@@ -448,9 +448,9 @@ def webhook():
                                 reply = f"{key_name} を {display} が借りました。"
                                 logger.info(f"借りる操作成功: {key_name} を {user_name} さんが借りました")
 
-                            # メッセージ送信
-                            asyncio.run(send_line_message(reply_token, reply))
-                            asyncio.run(push_to_authenticated_groups(reply))
+                                # メッセージ送信
+                                asyncio.run(send_line_message(reply_token, reply))
+                                asyncio.run(push_to_authenticated_groups(reply))
                         # 返却処理
                         elif action == "返却":
                             logger.info(f"返却操作開始: {key_name}")
