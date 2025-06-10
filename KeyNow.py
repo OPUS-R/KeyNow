@@ -413,6 +413,8 @@ def webhook():
 
                                 # 両方を一括で借りる
                                 user_name = get_user_name(user_id)
+                                line_name = asyncio.run(get_line_name(user_id))
+                                display = f"{user_name}さん（LINE名:{line_name}）"
                                 c.execute("INSERT INTO key_holders(key_name, holder_id, borrow_time) VALUES (?, ?, ?)",
                                           ("音倉", user_id, now))
                                 c.execute("INSERT INTO key_holders(key_name, holder_id, borrow_time) VALUES (?, ?, ?)",
@@ -420,9 +422,10 @@ def webhook():
                                 conn.commit()
                                 log_key_action("借りる", "音倉・音練", user_name)
                                 reply = f"音倉・音練 を {user_name} さんが借りました。"
+                                auth_reply = f"音倉・音練 を {display} が借りました。"
                                 logger.info(f"両方借りる操作成功: 音倉・音練 を {user_name} さんが借りました")
                                 asyncio.run(send_line_message(reply_token, reply))
-                                asyncio.run(push_to_authenticated_groups(reply))
+                                asyncio.run(push_to_authenticated_groups(auth_reply))
                                 break
 
                             # 個別の鍵借りる処理
@@ -435,11 +438,14 @@ def webhook():
                             else:
                                 # 鍵を借りる処理
                                 user_name = get_user_name(user_id)
+                                line_name = asyncio.run(get_line_name(user_id))
+                                display = f"{user_name}さん（LINE名:{line_name}）"
+
                                 c.execute("INSERT INTO key_holders(key_name, holder_id, borrow_time) VALUES (?, ?, ?)",
                                           (key_name, user_id, now))
                                 conn.commit()
                                 log_key_action("借りる", key_name, user_name)
-                                reply = f"{key_name} を {user_name} さんが借りました。"
+                                reply = f"{key_name} を {display} が借りました。"
                                 logger.info(f"借りる操作成功: {key_name} を {user_name} さんが借りました")
 
                             # メッセージ送信
@@ -462,8 +468,10 @@ def webhook():
                                 c.execute("DELETE FROM key_holders WHERE key_name IN (?, ?)", ("音倉", "音練"))
                                 conn.commit()
                                 user_name = get_user_name(user_id)
+                                line_name = asyncio.run(get_line_name(user_id))
+                                display = f"{user_name}さん（LINE名:{line_name}）"
                                 log_key_action("返却", "音倉・音練", user_name)
-                                reply = f"音倉・音練 を {user_name} さんが返却しました。"
+                                reply = f"音倉・音練 を {display} が返却しました。"
                                 logger.info(f"返却操作成功: 音倉・音練 を {user_name} さんが返却しました")
                                 asyncio.run(send_line_message(reply_token, reply))
                                 asyncio.run(push_to_authenticated_groups(reply))
@@ -476,8 +484,10 @@ def webhook():
                                 c.execute("DELETE FROM key_holders WHERE key_name=?", (key_name,))
                                 conn.commit()
                                 user_name = get_user_name(user_id)
+                                line_name = asyncio.run(get_line_name(user_id))
+                                display = f"{user_name}さん（LINE名:{line_name}）"
                                 log_key_action("返却", key_name, user_name)
-                                reply = f"{key_name} を {user_name} さんが返却しました。"
+                                reply = f"{key_name} を {display} さんが返却しました。"
                                 logger.info(f"返却操作成功: {key_name} を {user_name} さんが返却しました")
                                 asyncio.run(send_line_message(reply_token, reply))
                                 asyncio.run(push_to_authenticated_groups(reply))
@@ -500,13 +510,15 @@ def webhook():
                                     continue
 
                                 # 両方の鍵を一括で引き継ぎ
-                                new_name = get_user_name(user_id)
+                                user_name = get_user_name(user_id)
+                                line_name = asyncio.run(get_line_name(user_id))
+                                display = f"{user_name}さん（LINE名:{line_name}）"
                                 c.execute("UPDATE key_holders SET holder_id=?, borrow_time=? WHERE key_name IN (?, ?)",
                                           (user_id, now, "音倉", "音練"))
                                 conn.commit()
-                                log_key_action("引き継ぎ", "音倉・音練", new_name)
-                                reply = f"音倉・音練 を {new_name} さんに引き継ぎました。"
-                                logger.info(f"引き継ぎ操作成功: 音倉・音練 を {new_name} さんに引き継ぎました")
+                                log_key_action("引き継ぎ", "音倉・音練", user_name)
+                                reply = f"音倉・音練 を {display} に引き継ぎました。"
+                                logger.info(f"引き継ぎ操作成功: 音倉・音練 を {display} に引き継ぎました")
                                 asyncio.run(send_line_message(reply_token, reply))
                                 asyncio.run(push_to_authenticated_groups(reply))
                                 break
@@ -515,15 +527,17 @@ def webhook():
                             holder = c.fetchone()
                             if holder:
                                 # 個別引き継ぎ実行
-                                new_name = get_user_name(user_id)
+                                user_name = get_user_name(user_id)
+                                line_name = asyncio.run(get_line_name(user_id))
+                                display = f"{user_name}さん（LINE名:{line_name}）"
                                 c.execute(
                                     "UPDATE key_holders SET holder_id=?, borrow_time=? WHERE key_name=?",
                                     (user_id, now, key_name)
                                 )
                                 conn.commit()
-                                log_key_action("引き継ぎ", key_name, new_name)
-                                reply = f"{key_name} を {new_name} さんに引き継ぎました。"
-                                logger.info(f"引き継ぎ操作成功:{key_name} を {new_name}さんに引き継ぎました")
+                                log_key_action("引き継ぎ", key_name, user_name)
+                                reply = f"{key_name} を {display} に引き継ぎました。"
+                                logger.info(f"引き継ぎ操作成功:{key_name} を {display}に引き継ぎました")
                                 asyncio.run(send_line_message(reply_token, reply))
                                 asyncio.run(push_to_authenticated_groups(reply))
                             else:
@@ -632,6 +646,24 @@ def get_user_name(user_id):
     if result:
         return result[0]
     return "不明なユーザー"
+
+#LINE表示名取得関数
+async def get_line_name(user_id: str) -> str:
+    headers = {
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
+    }
+    url = f"https://api.line.me/v2/bot/profile/{user_id}"
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                return response.json().get("displayName", "")
+            else:
+                logger.warning(f"LINEプロフィール取得失敗（{user_id}）: {response.status_code}")
+                return ""
+        except Exception as e:
+            logger.error(f"LINEプロフィール取得エラー（{user_id}）: {str(e)}")
+            return ""
 
 #認証済みのグループへのメッセージ送信
 async def push_to_authenticated_groups(message: str):
