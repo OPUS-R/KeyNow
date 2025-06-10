@@ -344,7 +344,7 @@ def webhook():
             continue
 
     #グループ認証
-        if group_id and any(text.startswith(code) for code in config["auth_codes"]):#認証番号
+        if group_id and text.startswith(AUTH_CODE):#認証番号
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
             c.execute("INSERT OR IGNORE INTO groups(group_id) VALUES (?)", (group_id,))
