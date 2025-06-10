@@ -574,7 +574,9 @@ def webhook():
                 parts = []
                 for key_name, holder_id, borrow_time in rows:
                     holder_name = get_user_name(holder_id)
-                    parts.append(f"{key_name} → {holder_name} ({borrow_time})")
+                    line_name = asyncio.run(get_line_name(holder_id))
+                    display = f"{holder_name}さん（LINE名:{line_name}）"
+                    parts.append(f"{key_name} → {display} ({borrow_time})")
                 reply = "\n".join(parts)
             conn.close()
             asyncio.run(send_line_message(reply_token, reply))
