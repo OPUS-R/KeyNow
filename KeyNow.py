@@ -509,7 +509,29 @@ def webhook():
                                 logger.info(f"引き継ぎ操作成功: 音倉・音練 を {new_name} さんに引き継ぎました")
                                 asyncio.run(send_line_message(reply_token, reply))
                                 asyncio.run(push_to_authenticated_groups(reply))
-                                continue
+                                break
+
+                            c.execute("SELECT holder_id FROM key_holders WHERE key_name=?", (key_name,))
+                            holder = c.fetchone()
+                            if holder:
+                                # 個別引き継ぎ実行
+                                new_name = get_user_name(user_id)
+                                c.execute(
+                                    "UPDATE key_holders SET holder_id=?, borrow_time=? WHERE key_name=?",
+                                    (user_id, now, key_name)
+                                )
+                                conn.commit()
+                                log_key_action("引き継ぎ", key_name, new_name)
+                                reply = f"{key_name} を {new_name} さんに引き継ぎました。"
+                                logger.info(f"引き継ぎ操作成功:{key_name} を {new_name}さんに引き継ぎました")
+                                asyncio.run(send_line_message(reply_token, reply))
+                                asyncio.run(push_to_authenticated_groups(reply))
+                            else:
+                                # 鍵がそもそも借りられていない場合
+                                reply = f"{key_name} は現在借りられていません。"
+                                logger.warning(f"引き継ぎ失敗: {key_name} は借りられていません")
+                                asyncio.run(send_line_message(reply_token, reply))
+                            continue
 
                     except Exception as e:
                         error_message = f"操作中にエラーが発生しました: {str(e)}"
