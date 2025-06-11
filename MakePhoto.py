@@ -1,10 +1,22 @@
+import os
 import json
 import sqlite3
 import requests
+import time
+import logging
 from flask import Flask, request
 from datetime import datetime
 
-# 設定読み込み
+# ログ設定
+logging.basicConfig(
+    filename="linebot.log",
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
+
+# LINEAPI認証関連
 config = json.load(open("line.json", encoding="utf-8"))
 LINE_ACCESS_TOKEN = config["line_bot_token"]
 LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply"
@@ -13,9 +25,9 @@ HEADERS = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
 }
+CLOUDFLARE_BASE = config["CLOUD"]
 
-# Cloudflare Tunnel 公開URL
-CLOUDFLARE_BASE = "https://photo.minepus.net"
+
 
 # DB設定
 DB_PATH = "ga_selection.db"
@@ -63,16 +75,32 @@ def reset_algorithm():
     conn.commit()
     conn.close()
 
-# 🔁 FlaskローカルAPI呼び出し（10.0.0.1側）
 def request_images(user_id):
     res = requests.post("https://photo.minepus.net/generate", json={"user_id": user_id})
+    logger.info(f"Requested image generation for user {user_id}")
+    if res.status_code == 403:
+        raise Exception("locked")
     return res.json()["image1"], res.json()["image2"], res.json()["generation"]
 
+def wait_for_images(generation, timeout=10):
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            r = requests.get(f"{CLOUDFLARE_BASE}/status", params={"gen": str(generation)}, timeout=1)
+            if r.status_code == 200 and r.json().get("ready"):
+                return True
+        except Exception as e:
+            logger.warning(f"Status check failed: {e}")
+        time.sleep(1)
+    return False
+
+
 def reply_message(token, messages):
-    requests.post(LINE_REPLY_URL, headers=HEADERS, json={
+    res = requests.post(LINE_REPLY_URL, headers=HEADERS, json={
         "replyToken": token,
         "messages": messages
     })
+    logger.info(f"Reply sent: {res.status_code} {res.text}")
 
 def push_message(to, messages):
     requests.post(LINE_PUSH_URL, headers=HEADERS, json={
@@ -83,6 +111,7 @@ def push_message(to, messages):
 @app.route("/webhook", methods=["POST"])
 def webhook():
     body = request.json
+    logger.info(f"Received webhook: {body}")
 
     for event in body["events"]:
         if event["type"] != "message":
@@ -99,51 +128,79 @@ def webhook():
         text = msg["text"].strip()
 
         if text == "アルゴリズム":
-            img1, img2, gen = request_images(user_id)
+            try:
+                # 画像生成をリクエスト
+                res = requests.post(f"{CLOUDFLARE_BASE}/generate", json={"user_id": user_id})
 
-            # ✅ Cloudflare URLに変換
-            img1 = img1.replace("http://10.0.0.1:5000", CLOUDFLARE_BASE)
-            img2 = img2.replace("http://10.0.0.1:5000", CLOUDFLARE_BASE)
+                if res.status_code == 403:
+                    reply_message(reply_token, [{
+                        "type": "text",
+                        "text": "現在他のユーザーが操作中です。操作完了までお待ちください"
+                    }])
+                    continue
 
-            save_generated(user_id, gen, img1, img2)
+                if res.status_code != 200:
+                    reply_message(reply_token, [{
+                        "type": "text",
+                        "text": "画像生成に失敗しました。もう一度お試しください。"
+                    }])
+                    continue
 
-            reply_message(reply_token, [
-                {"type": "text", "text": f"第{gen}世代の画像です。どちらがAに似ていますか？1または2で選んでください。"},
-                {"type": "image", "originalContentUrl": img1, "previewImageUrl": img1},
-                {"type": "image", "originalContentUrl": img2, "previewImageUrl": img2}
-            ])
-            reply_message(reply_token, [{"type": "text", "text": "画像を送信しました。"}])
+                generation = res.json().get("generation", 0)
+                img1_url = f"{CLOUDFLARE_BASE}/images/{generation}/1.jpg"
+                img2_url = f"{CLOUDFLARE_BASE}/images/{generation}/2.jpg"
+
+                if not wait_for_images(generation):
+                    reply_message(reply_token, [{
+                        "type": "text",
+                        "text": "画像の準備に時間がかかっています。しばらくしてから再度お試しください。"
+                    }])
+                    continue
+
+                # DBに保存など（任意）
+                save_generated(user_id, generation, img1_url, img2_url)
+
+                # 返信メッセージ送信
+                reply_message(reply_token, [
+                    {"type": "text", "text": f"第{generation}世代の画像です。どちらがAに似ていますか？1または2で選んでください。"},
+                    {"type": "image", "originalContentUrl": img1_url, "previewImageUrl": img1_url},
+                    {"type": "image", "originalContentUrl": img2_url, "previewImageUrl": img2_url}
+                ])
+            except Exception as e:
+                logger.error(f"画像生成エラー: {e}")
+                reply_message(reply_token, [{
+                    "type": "text",
+                    "text": "エラーが発生しました。もう一度お試しください。"
+                }])
+
 
         elif text in ["1", "2"]:
-            update_selection(user_id, int(text))
+            selected = int(text)
+            update_selection(user_id, selected)
 
-            # 🔁 画像選択情報を画像生成サーバーに通知
-            conn = sqlite3.connect(DB_PATH)
-            c = conn.cursor()
-            c.execute('''SELECT generation, image1, image2 FROM user_selection 
-                         WHERE user_id = ? AND selected IS NOT NULL
-                         ORDER BY timestamp DESC LIMIT 1''', (user_id,))
-            row = c.fetchone()
-            conn.close()
-
-            if row:
-                generation, img1, img2 = row
-                requests.post("https://photo.minepus.net/select", json={
+            try:
+                res = requests.post("https://photo.minepus.net/select", json={
                     "user_id": user_id,
-                    "generation": generation,
-                    "selected": int(text),
-                    "img1": img1,
-                    "img2": img2
+                    "selected": selected
                 })
-
-            reply_message(reply_token, [{"type": "text", "text": f"{text} を選択として記録しました。"}])
+                res.raise_for_status()
+                reply_message(reply_token, [{"type": "text", "text": f"{text} を選択として記録しました。"}])
+            except Exception as e:
+                logger.error(f"Selection sync error: {e}")
+                reply_message(reply_token, [{"type": "text", "text": "選択の同期に失敗しました。"}])
 
         elif text == "アルゴリズムリセット":
             reset_algorithm()
-            reply_message(reply_token, [{"type": "text", "text": "アルゴリズム履歴をリセットしました。"}])
 
-        else:
-            reply_message(reply_token, [{"type": "text", "text": "「アルゴリズム」「1」「2」「アルゴリズムリセット」のいずれかを送信してください。"}])
+            try:
+                res = requests.post("https://photo.minepus.net/reset", json={
+                    "user_id": user_id
+                })
+                res.raise_for_status()
+                reply_message(reply_token, [{"type": "text", "text": "アルゴリズム履歴をリセットしました。"}])
+            except Exception as e:
+                logger.error(f"Reset sync error: {e}")
+                reply_message(reply_token, [{"type": "text", "text": "リセットに失敗しました。"}])
 
     return "OK", 200
 
