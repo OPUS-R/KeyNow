@@ -7,12 +7,15 @@ from PIL import Image
 import logging
 from flask import send_from_directory
 import sqlite3
+import asyncio
+import threading
 
 # ログ設定
 logging.basicConfig(filename='photo_server.log', level=logging.INFO,
                     format='%(asctime)s [%(levelname)s] %(message)s')
 
 app = Flask(__name__)
+timeout_task = None
 
 # 写真保存フォルダ
 BASE_DIR = "images"
@@ -51,7 +54,8 @@ def set_generation(gen):
 # 全体状態共有
 global_state = {
     "selected": None,
-    "is_locked": False
+    "is_locked": False,
+    "timeout_task": None
 }
 
 def generate_image_array():#写真生成
@@ -63,6 +67,13 @@ def save_image(path, array):#写真保存
 def evolve(parent1, parent2):
     mask = np.random.rand(*parent1.shape) < 0.5
     return np.where(mask, parent1, parent2)
+
+def unlock_after_timeout_sync():
+    if global_state["is_locked"]:
+        global_state["is_locked"] = False
+        global_state["selected"] = None
+        global_state["timeout_task"] = None
+        logging.info("Timeout expired: lock released due to inactivity.")
 
 @app.route("/generate", methods=["POST"])#写真生成受付
 def generate():
@@ -96,6 +107,9 @@ def generate():
 
         global_state["selected"] = None
         global_state["is_locked"] = True
+        timer = threading.Timer(50, unlock_after_timeout_sync)
+        timer.start()
+        global_state["timeout_task"] = timer
 
         res = {
             "image1": f"http://10.0.0.1:5000/images/{generation}/1.jpg",
@@ -118,6 +132,10 @@ def select():
         selected = int(request.json["selected"])
         global_state["selected"] = selected
         global_state["is_locked"] = False
+
+        if global_state["timeout_task"]:
+            global_state["timeout_task"].cancel()
+            global_state["timeout_task"] = None
 
         current_gen = get_generation()
         new_gen = current_gen + 1
