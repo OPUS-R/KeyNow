@@ -409,7 +409,7 @@ def webhook():
                                     reply = "音倉または音練のどちらかが既に借りられています。"
                                     logger.warning(f"借りる操作失敗: 音倉・音練のどちらかが既に借りられている: {borrowed_keys}")
                                     asyncio.run(send_line_message(reply_token, reply))
-                                    continue
+                                    break
 
                                 # 両方を一括で借りる
                                 user_name = get_user_name(user_id)
@@ -462,7 +462,7 @@ def webhook():
                                     reply = "音倉と音練は同じ所有者でないため、同時に返却できません。"
                                     logger.warning(f"返却操作失敗: 音倉と音練の所有者が異なる")
                                     asyncio.run(send_line_message(reply_token, reply))
-                                    continue
+                                    break
 
                                 # 両方の鍵を一括で返却
                                 c.execute("DELETE FROM key_holders WHERE key_name IN (?, ?)", ("音倉", "音練"))
@@ -507,7 +507,7 @@ def webhook():
                                     reply = "音倉と音練は同じ所有者でないため、同時に引き継ぎできません。"
                                     logger.warning(f"引き継ぎ操作失敗: 音倉と音練の所有者が異なる")
                                     asyncio.run(send_line_message(reply_token, reply))
-                                    continue
+                                    break
 
                                 # 両方の鍵を一括で引き継ぎ
                                 user_name = get_user_name(user_id)
