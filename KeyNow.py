@@ -404,7 +404,7 @@ def webhook():
                                 c.execute("SELECT holder_id FROM key_holders WHERE key_name IN (?, ?)", ("音倉", "音練"))
                                 holders = c.fetchall()
                                 if len(holders) > 0:
-                                    # 既にどちらかが借りられている場合
+                                    # 既にどちらかが借りられている場合#
                                     borrowed_keys = [h[0] for h in holders]
                                     reply = "音倉または音練のどちらかが既に借りられています。"
                                     logger.warning(f"借りる操作失敗: 音倉・音練のどちらかが既に借りられている: {borrowed_keys}")
