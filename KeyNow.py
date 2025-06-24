@@ -63,7 +63,7 @@ async def send_history(reply_token: str):
     if not rows:
         reply = "過去30日間の操作履歴はありません。"
     else:
-        logs = [f"{row[3]} - {row[1]}: {row[2]} が {row[0]}" for row in rows]
+        logs = [f"{row[3]} - {row[1]}: {row[2]} - {row[0]}" for row in rows]
         reply = "過去30日間の履歴:\n" + "\n".join(logs)
 
     await send_line_message(reply_token, reply)
@@ -272,7 +272,7 @@ async def notify_overdue_keys():
             await push_line_message(holder_id, message)
             await push_to_authenticated_groups(message_author)
             for key_name in notified_keys:
-                log_key_action("通知", key_name, user_name)
+                log_key_action("通知(21時)", key_name, user_name)
             logger.warning(f"通知:{key_str} の返却期限が過ぎています。. {user_name} と認証済みグループに通知しました。")
 
         except Exception as e:
