@@ -53,7 +53,16 @@ async def send_history(reply_token: str):
     query = """
     SELECT action, key_name, user_name, timestamp
     FROM key_logs
-    WHERE timestamp >= datetime('now', '-30 day')
+    WHERE
+      (
+        instr(timestamp, '-') > 0
+        AND timestamp >= strftime('%Y-%m-%d %H:%M:%S', 'now', '-10 day', 'localtime')
+      )
+      OR
+      (
+        instr(timestamp, '/') > 0
+        AND timestamp >= strftime('%Y/%m/%d %H:%M:%S', 'now', '-10 day', 'localtime')
+      )
     ORDER BY timestamp DESC
     """
     c.execute(query)
@@ -61,10 +70,10 @@ async def send_history(reply_token: str):
     conn.close()
 
     if not rows:
-        reply = "過去30日間の操作履歴はありません。"
+        reply = "過去10日間の操作履歴はありません。"
     else:
         logs = [f"{row[3]} - {row[1]}: {row[2]} が {row[0]}" for row in rows]
-        reply = "過去30日間の履歴:\n" + "\n".join(logs)
+        reply = "過去10日間の履歴:\n" + "\n".join(logs)
 
     await send_line_message(reply_token, reply)
 
