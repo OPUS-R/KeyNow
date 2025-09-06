@@ -46,7 +46,7 @@ def log_key_action(action, key_name, user_name):
     conn.close()
     logger.info(f"Logged action: {action} - {key_name} by {user_name}")
 
-#ログ履歴送信
+#ログ履歴送信(5000以上でオーバー)
 async def send_history(reply_token: str):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
